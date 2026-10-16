@@ -33,4 +33,3 @@ Gestão de Ticket: Confirmação, alteração ou cancelamento de uma coleta já 
 
 
 prompt logo do projeto: "Faça uma logo de um hambúrguer mordido igual da Apple, e troque a folha por uma azeitona"
-
