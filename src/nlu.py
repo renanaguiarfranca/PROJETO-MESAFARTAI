@@ -7,10 +7,17 @@ from sklearn.ensemble import RandomForestClassifier
 frases_treino = [
     # Doações
     "Quero doar 10 kg de arroz",
+    "quero doar 10kg de alimento", 
+    "quero doar 10 kg de batata",  
+    "quero doar 10kg de cenoura",  
     "Posso contribuir com 15 litros de leite",
     "Tenho 30 kg de banana para doar",
     "Tenho 20 caixas de tomate para doar hoje",
     "Gostaria de oferecer refeições prontas para abrigo",
+    "10kg arroz",
+    "doar 10 kg arroz",
+    "Tenho 20kg de arroz",
+    "20 kg arroz doar",    
     "Tenho sobra de alimentos do meu restaurante",
     "Posso entregar 5 kg de feijão perto da validade",
     "Queremos cadastrar uma doação de legumes",
@@ -37,7 +44,7 @@ frases_treino = [
 
 class MotorNLU:
     # Definimos n_clusters=4 pois temos 4 assuntos principais nas frases acima
-    def __init__(self, n_clusters=4, limiar_threshold=0.60):
+    def __init__(self, n_clusters=4, limiar_threshold=0.30):
         self.limiar_threshold = limiar_threshold
         self.n_clusters = n_clusters
         
@@ -65,25 +72,26 @@ class MotorNLU:
         Processa uma mensagem, prevê o grupo (cluster) com o Random Forest
         e aplica o Fallback caso a confiança seja baixa.
         """
-        # 1. Vetorização da entrada
-        vetor_texto = self.vectorizer.transform([texto_usuario])
+        # 1. LIMPEZA: Isso separa "10kg" para "10 kg" para o modelo não surtar
+        texto_limpo = texto_usuario.lower().replace("kg", " kg").replace("  ", " ")
         
-        # 2. Predição de probabilidade via Random Forest
+        # 2. Vetorização usando o texto limpo
+        vetor_texto = self.vectorizer.transform([texto_limpo])
+        
+        # 3. Predição
         probabilidades = self.classifier.predict_proba(vetor_texto)[0]
         max_confianca = float(np.max(probabilidades))
         grupo_predito = int(self.classifier.predict(vetor_texto)[0])
         
-        # 3. Trava de Segurança por Threshold
+        # 4. Trava de Segurança por Threshold
         if max_confianca < self.limiar_threshold:
             return {
                 "intencao": "fallback",
                 "confianca": max_confianca,
-                "resposta": (
-                    "Desculpe, não consegui entender com clareza o seu pedido. \n"
-                    "Você pode refazer a mensagem detalhando melhor o que precisa?"
-                )
+                "resposta": "Desculpe, não consegui entender com clareza o seu pedido."
             }
         
+        # 5. Retorno corrigido (usando apenas "intencao" e "Grupo_X")
         return {
             "intencao": f"Grupo_{grupo_predito}",
             "confianca": max_confianca,
@@ -92,7 +100,7 @@ class MotorNLU:
 
 # --- TESTE DO MÓDULO EM TEMPO DE EXECUÇÃO ---
 if __name__ == "__main__":
-    nlu = MotorNLU(n_clusters=4, limiar_threshold=0.60)
+    nlu = MotorNLU(n_clusters=4, limiar_threshold=0.40)
     
     # Bateria de testes automatizados
     frases_teste = [
