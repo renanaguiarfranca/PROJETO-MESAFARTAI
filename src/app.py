@@ -551,5 +551,4 @@ def main():
     else:
         pagina_admin(s)
 
-
 main()

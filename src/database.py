@@ -523,3 +523,4 @@ def salvar_cache_geo(consulta, latitude, longitude, endereco_formatado=None, fon
 
 if __name__ == "__main__":
     inicializar_banco()
+    

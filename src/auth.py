@@ -61,3 +61,4 @@ class LimitadorTentativas:
 
     def registrar_sucesso(self):
         self.falhas, self._ate = 0, 0.0
+        

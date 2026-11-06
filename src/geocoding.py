@@ -1,6 +1,5 @@
 """
 geocoding.py - Transforma CEP / endereço em latitude e longitude (APIs gratuitas, com cache).
-
 Ordem de tentativas para um CEP:
     1. cache no SQLite (tabela cache_geocodificacao)       -> não gasta nenhuma API
     2. BrasilAPI v2   (CEP -> endereço + coordenadas, quando conhecidas)

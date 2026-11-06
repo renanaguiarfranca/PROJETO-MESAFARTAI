@@ -421,3 +421,4 @@ class Conversa:
             self._dizer("Entendido. Como as duas opções não serviram, a doação ficou registrada como *sem destino* "
                         f"(protocolo **{protocolo}**). Obrigado por querer ajudar!")
             self._zerar_fluxo()
+            
