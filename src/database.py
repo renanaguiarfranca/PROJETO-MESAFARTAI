@@ -521,6 +521,58 @@ def salvar_cache_geo(consulta, latitude, longitude, endereco_formatado=None, fon
              json.dumps(detalhes, ensure_ascii=False) if detalhes else None))
 
 
+SCHEMA_IMPACTO = """
+CREATE TABLE IF NOT EXISTS doacoes_impacto (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    alimento TEXT NOT NULL,
+    quantidade_kg REAL NOT NULL,
+    validade TEXT NOT NULL,
+    urgencia TEXT NOT NULL,
+    ong_destino TEXT NOT NULL
+)
+"""
+
+
+def criar_tabela_impacto():
+    conn = conectar()
+    try:
+        conn.execute(SCHEMA_IMPACTO)
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def registrar_doacao_impacto(alimento, quantidade_kg, validade, urgencia, ong_destino):
+    criar_tabela_impacto()
+    conn = conectar()
+    try:
+        conn.execute(
+            "INSERT INTO doacoes_impacto (alimento, quantidade_kg, validade, urgencia, ong_destino) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (alimento, quantidade_kg, validade, urgencia, ong_destino))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def total_kg_impacto():
+    criar_tabela_impacto()
+    conn = conectar()
+    try:
+        return float(conn.execute("SELECT COALESCE(SUM(quantidade_kg), 0) FROM doacoes_impacto").fetchone()[0])
+    finally:
+        conn.close()
+
+
+def listar_doacoes_impacto():
+    criar_tabela_impacto()
+    conn = conectar()
+    try:
+        return [dict(l) for l in conn.execute("SELECT * FROM doacoes_impacto").fetchall()]
+    finally:
+        conn.close()
+
+
 if __name__ == "__main__":
     inicializar_banco()
     

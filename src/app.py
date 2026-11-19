@@ -35,6 +35,7 @@ if _cfg_app.get("nominatim_user_agent"):
     os.environ.setdefault("MESAFARTAI_USER_AGENT", str(_cfg_app["nominatim_user_agent"]))
 
 import database as db  # noqa: E402
+import impacto  # noqa: E402
 from auth import LimitadorTentativas, verificar_credenciais  # noqa: E402
 from chatbot import Conversa, formatar_doacao  # noqa: E402
 from entities import ExtratorEntidades  # noqa: E402
@@ -53,6 +54,7 @@ PRECISAO = {"numero": "endereço exato", "cep": "CEP (rua/bairro)", "aproximada"
 @st.cache_resource(show_spinner="Preparando o assistente (na primeira vez pode demorar um pouco)...")
 def servicos():
     db.inicializar_banco(inserir_seeds=bool(_cfg_app.get("inserir_ongs_demonstracao", True)))
+    db.criar_tabela_impacto()
     return SimpleNamespace(nlu=MotorNLU(), extrator=ExtratorEntidades(), geo=Geocodificador(),
                            motor=MotorMatchmaking(), limitador=LimitadorTentativas(max_falhas=5, bloqueio_s=60))
 
@@ -89,9 +91,17 @@ def pagina_doar(s):
         st.caption("Converse com o assistente: ele registra sua doação e indica a ONG compatível mais próxima. "
                    "Não é preciso criar conta.")
 
+        if st.session_state.pop("toast_doacao", False):
+            st.toast("Doação processada e registrada no banco!", icon="🍲")
+
         for m in conversa.mensagens:
             with st.chat_message(m["role"], avatar="🍽️" if m["role"] == "assistant" else "🙂"):
                 st.markdown(m["content"])
+
+        if "confianca_nlu" in st.session_state:
+            confianca, intencao, fallback = st.session_state.confianca_nlu
+            st.progress(float(confianca), text=f"Confiança da IA (NLU): {confianca * 100:.1f}%")
+            st.caption(f"Intenção reconhecida: **{intencao}**" + (" · fallback acionado" if fallback else ""))
 
         botoes = conversa.botoes()
         if botoes:
@@ -108,9 +118,45 @@ def pagina_doar(s):
 def enviar(conversa, texto):
     with st.chat_message("user", avatar="🙂"):
         st.markdown(texto)
+    s = servicos()
+    etapa, protocolo = conversa.etapa, conversa.protocolo
     with st.spinner("Pensando..."):
+        if etapa == "inicio":
+            r = s.nlu.processar_mensagem(texto)
+            st.session_state.confianca_nlu = (r["confianca"], r["intencao"], r["fallback"])
         conversa.enviar(texto)
+    if conversa.protocolo and conversa.protocolo != protocolo:
+        impacto.registrar_impacto(conversa.protocolo, s.extrator)
+        st.session_state.toast_doacao = True
     st.rerun()
+
+
+def pagina_impacto():
+    st.title("📊 Dashboard de Impacto Social")
+    st.caption("Indicadores calculados em tempo real a partir das doações registradas pelo chatbot.")
+    total_kg = db.total_kg_impacto()
+    df_doacoes = pd.DataFrame(db.listar_doacoes_impacto())
+    df_ongs = pd.DataFrame(db.listar_ongs())
+
+    m = st.columns(4)
+    m[0].metric("Alimentos arrecadados", f"{total_kg:.1f} kg")
+    m[1].metric("Doações registradas", len(df_doacoes))
+    m[2].metric("Urgência ALTA", int((df_doacoes["urgencia"] == "ALTA").sum()) if not df_doacoes.empty else 0)
+    m[3].metric("ONGs parceiras", len(df_ongs))
+    st.divider()
+
+    st.subheader("Doações registradas")
+    if df_doacoes.empty:
+        st.info("Ainda não há doações registradas. Faça uma doação pelo chat para ver os indicadores.")
+    else:
+        st.dataframe(df_doacoes, width="stretch", hide_index=True)
+
+    st.subheader("Distribuição Geográfica das ONGs")
+    if df_ongs.empty:
+        st.info("Nenhuma ONG cadastrada.")
+    else:
+        st.map(df_ongs)
+        st.caption("Mapa: © OpenStreetMap contributors.")
 
 
 # ============================================================================
@@ -534,16 +580,26 @@ def aba_registro_doacoes():
 def main():
     s = servicos()
     garantir_banco()
+    st.sidebar.image(str(db.RAIZ / "assets" / "logo.png"), width=180)
     st.sidebar.title("🍽️ MESAFARTAI")
+    st.sidebar.info("ODS 2 — Fome Zero")
     st.sidebar.caption("Conectando quem tem alimento a quem combate a fome.")
-    pagina = st.sidebar.radio("Menu", ["💬 Quero doar", "🔎 Acompanhar doação", "ℹ️ Como funciona", "🔐 Administração"],
-                              key="menu")
-    if pagina == "💬 Quero doar" and st.sidebar.button("🔄 Nova conversa", width="stretch"):
+    pagina = st.sidebar.radio("Menu", ["💬 Quero doar", "📊 Dashboard de Impacto Social", "🔎 Acompanhar doação",
+                                       "ℹ️ Como funciona", "🔐 Administração"], key="menu")
+    if st.sidebar.button("🧹 Limpar Conversa", width="stretch"):
         st.session_state.pop("conversa", None)
+        st.session_state.pop("confianca_nlu", None)
         st.rerun()
+    st.sidebar.divider()
+    st.sidebar.markdown("**Integrantes do grupo**  \n"
+                        "Lucas Maboni Santana — 158341  \n"
+                        "Ana Beatriz Nascimento — 157036  \n"
+                        "Renan Aguiar França — 94352")
 
     if pagina == "💬 Quero doar":
         pagina_doar(s)
+    elif pagina == "📊 Dashboard de Impacto Social":
+        pagina_impacto()
     elif pagina == "🔎 Acompanhar doação":
         pagina_consulta()
     elif pagina == "ℹ️ Como funciona":
